@@ -1,3 +1,4 @@
+import 'package:category_widget/api.dart';
 import 'package:category_widget/category.dart';
 import 'package:category_widget/unit.dart';
 import 'package:flutter/material.dart';
@@ -19,9 +20,11 @@ class _UnitConverterState extends State<UnitConverter> {
   Unit _fromValue;
   Unit _toValue;
   double _inputValue;
-  String _convertValue = '';
+  String _convertedValue = '';
   List<DropdownMenuItem> _unitMenuItems;
   bool _showValidarionError = false;
+  final _inputKey = GlobalKey(debugLabel: 'inputText');
+  bool _showErrorUI = false;
 
   @override
   void initState() {
@@ -63,6 +66,9 @@ class _UnitConverterState extends State<UnitConverter> {
       _fromValue = widget.category.units[0];
       _toValue = widget.category.units[1];
     });
+    if (_inputValue != null) {
+      _updateConversion();
+    }
   }
 
   String _format(double value) {
@@ -81,18 +87,45 @@ class _UnitConverterState extends State<UnitConverter> {
     return outputValue;
   }
 
-  void _updateConversion() {
+  Future<void> _updateConversion() async {
+    // Our API has a handy convert function, so we can use that for
+    // the Currency [Category]
+    if (widget.category.name == apiCategory['name']) {
+      final api = Api();
+      final conversion = await api.convert(apiCategory['route'],
+          _inputValue.toString(), _fromValue.name, _toValue.name);
+
+      if(conversion == null){
+        setState(() {
+          _showErrorUI = true;
+        });
+        return;
+      }    
+
+      setState(() {
+        _convertedValue = _format(conversion);
+      });
+      return;
+    }
+    // For the static units, we do the conversion ourselves
     setState(() {
-      var valueConversion =
-          _inputValue * (_toValue.conversion / _fromValue.conversion);
-      _convertValue = _format(valueConversion);
+      _convertedValue =
+          _format(_inputValue * (_toValue.conversion / _fromValue.conversion));
     });
   }
+
+  // void _updateConversion() {
+  //   setState(() {
+  //     var valueConversion =
+  //         _inputValue * (_toValue.conversion / _fromValue.conversion);
+  //     _convertedValue = _format(valueConversion);
+  //   });
+  // }
 
   void _updateInputValue(String input) {
     setState(() {
       if (input == null || input.isEmpty) {
-        _convertValue = '';
+        _convertedValue = '';
         return;
       }
       try {
@@ -132,16 +165,15 @@ class _UnitConverterState extends State<UnitConverter> {
     }
   }
 
-  Widget _createDropdown(String currentValue, ValueChanged<dynamic> onChanged){
+  Widget _createDropdown(String currentValue, ValueChanged<dynamic> onChanged) {
     return Container(
       margin: EdgeInsets.only(top: 16.0),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border.all(
-          color: Colors.grey[400],
-          width: 1.0,
-        )
-      ),
+          color: Colors.grey[50],
+          border: Border.all(
+            color: Colors.grey[400],
+            width: 1.0,
+          )),
       padding: EdgeInsets.symmetric(vertical: 8.0),
       child: Theme(
         data: Theme.of(context).copyWith(
@@ -164,12 +196,46 @@ class _UnitConverterState extends State<UnitConverter> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.category.units == null ||
+        (widget.category.name == apiCategory['name'] && _showErrorUI)) {
+      return SingleChildScrollView(
+        child: Container(
+          margin: _padding,
+          padding: _padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16.0),
+            color: widget.category.color['error'],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 180.0,
+                color: Colors.white,
+              ),
+              Text(
+                "Oh no! We can't connect right now!",
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headline.copyWith(
+                      color: Colors.white,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+   
+
     final input = Padding(
       padding: _padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           TextField(
+            key: _inputKey,
             style: Theme.of(context).textTheme.display1,
             decoration: InputDecoration(
               labelStyle: Theme.of(context).textTheme.display1,
@@ -179,7 +245,6 @@ class _UnitConverterState extends State<UnitConverter> {
                 borderRadius: BorderRadius.circular(0.0),
               ),
             ),
-
             keyboardType: TextInputType.number,
             onChanged: _updateInputValue,
           ),
@@ -188,14 +253,14 @@ class _UnitConverterState extends State<UnitConverter> {
       ),
     );
 
-    final arrows = RotatedBox (
+    final arrows = RotatedBox(
       quarterTurns: 1,
       child: Icon(
         Icons.compare_arrows,
         size: 40.0,
       ),
     );
-    
+
     final output = Padding(
       padding: _padding,
       child: Column(
@@ -203,7 +268,7 @@ class _UnitConverterState extends State<UnitConverter> {
         children: <Widget>[
           InputDecorator(
             child: Text(
-              _convertValue,
+              _convertedValue,
               style: Theme.of(context).textTheme.display1,
             ),
             decoration: InputDecoration(
@@ -247,8 +312,6 @@ class _UnitConverterState extends State<UnitConverter> {
         },
       ),
     );
-
   }
 
-  
 }
